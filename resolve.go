@@ -110,8 +110,13 @@ func handleZone(zone *Zone) func(dns.ResponseWriter, *dns.Msg) {
 				}
 				m.Answer = append(m.Answer, soa)
 			case dns.TypeA:
-				results := resolve(zone, []string{q.Name}, true, false)
+				results, allLen := resolve(zone, q.Name, true, false)
 				if len(results) == 0 {
+					if allLen == 0 {
+						m.SetRcode(r, dns.RcodeNameError)
+					} else {
+						m.SetRcode(r, dns.RcodeSuccess)
+					}
 					m.Ns = append(m.Ns, getSOAonError(zone))
 					w.WriteMsg(m)
 					return
@@ -120,8 +125,13 @@ func handleZone(zone *Zone) func(dns.ResponseWriter, *dns.Msg) {
 					m.Answer = append(m.Answer, result)
 				}
 			case dns.TypeAAAA:
-				results := resolve(zone, []string{q.Name}, false, true)
+				results, allLen := resolve(zone, q.Name, false, true)
 				if len(results) == 0 {
+					if allLen == 0 {
+						m.SetRcode(r, dns.RcodeNameError)
+					} else {
+						m.SetRcode(r, dns.RcodeSuccess)
+					}
 					m.Ns = append(m.Ns, getSOAonError(zone))
 					w.WriteMsg(m)
 					return
@@ -269,34 +279,32 @@ func getNS(qName string, zone *Zone) []dns.RR {
 	return nss
 }
 
-func resolve(zone *Zone, fqdns []string, ipv4 bool, ipv6 bool) []dns.RR {
+func resolve(zone *Zone, fqdn string, ipv4 bool, ipv6 bool) ([]dns.RR, int) {
 	rr := []dns.RR{}
-	for _, fqdn := range fqdns {
-		domain, ok := resolveDomain[zone.Suffix]
-		if !ok {
-			continue
+	domain, ok := resolveDomain[zone.Suffix]
+	if !ok {
+		return nil, 0
+	}
+	records := domain.search(fqdn, zone.Suffix)
+	if records == nil {
+		return nil, 0
+	}
+	for _, record := range *records {
+		if ipv4 && record.DNSType == dns.TypeA {
+			rr = append(rr, &dns.A{
+				Hdr: dns.RR_Header{Name: fqdn, Rrtype: dns.TypeA, Class: dns.ClassINET, Ttl: zone.TTL},
+				A:   record.A,
+			})
 		}
-		records := domain.search(fqdn, zone.Suffix)
-		if records == nil {
-			continue
-		}
-		for _, record := range *records {
-			if ipv4 && record.DNSType == dns.TypeA {
-				rr = append(rr, &dns.A{
-					Hdr: dns.RR_Header{Name: fqdn, Rrtype: dns.TypeA, Class: dns.ClassINET, Ttl: zone.TTL},
-					A:   record.A,
-				})
-			}
-			if ipv6 && record.DNSType == dns.TypeAAAA {
-				rr = append(rr, &dns.AAAA{
-					Hdr:  dns.RR_Header{Name: fqdn, Rrtype: dns.TypeAAAA, Class: dns.ClassINET, Ttl: zone.TTL},
-					AAAA: record.AAAA,
-				})
-			}
+		if ipv6 && record.DNSType == dns.TypeAAAA {
+			rr = append(rr, &dns.AAAA{
+				Hdr:  dns.RR_Header{Name: fqdn, Rrtype: dns.TypeAAAA, Class: dns.ClassINET, Ttl: zone.TTL},
+				AAAA: record.AAAA,
+			})
 		}
 	}
 	sortRR(rr)
-	return rr
+	return rr, len(*records)
 }
 
 func sortRR(rr []dns.RR) {
