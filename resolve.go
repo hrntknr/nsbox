@@ -83,6 +83,7 @@ func handleZone(zone *Zone) func(dns.ResponseWriter, *dns.Msg) {
 		m := new(dns.Msg)
 		m.SetReply(r)
 		m.Response = true
+		m.SetEdns0(4096, true)
 
 		if r.IsTsig() != nil {
 			name := r.Extra[len(r.Extra)-1].(*dns.TSIG).Hdr.Name
@@ -229,7 +230,7 @@ func zoneMerge(zoneConfig *ZoneConfig, zoneDefaultConfig *ZoneDefaultConfig) (*Z
 
 func getSOAonError(zone *Zone) *dns.SOA {
 	return &dns.SOA{
-		Hdr:     dns.RR_Header{Name: zone.Suffix, Rrtype: dns.TypeSOA, Class: dns.ClassINET, Ttl: 0},
+		Hdr:     dns.RR_Header{Name: zone.Suffix, Rrtype: dns.TypeSOA, Class: dns.ClassINET, Ttl: zone.TTL},
 		Ns:      zone.SOA.NS,
 		Mbox:    zone.SOA.MBox,
 		Serial:  2019121501,
