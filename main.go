@@ -18,9 +18,6 @@ import (
 var (
 	configPath = flag.String("c", "./config.yml", "path of configuration file")
 	config     = &Config{
-		Server: ServerConfig{
-			Port: 53,
-		},
 		Netbox: NetboxConfig{
 			UseTLS:    false,
 			VerifyTLS: true,
@@ -30,8 +27,8 @@ var (
 	}
 )
 
-func serve(net string, port int, secret *map[string]string, soreuseport bool) {
-	server := &dns.Server{Addr: fmt.Sprintf(":%d", port), Net: net, TsigSecret: *secret, ReusePort: soreuseport}
+func serve(net string, listen string, secret *map[string]string, soreuseport bool) {
+	server := &dns.Server{Addr: listen, Net: net, TsigSecret: *secret, ReusePort: soreuseport}
 	if err := server.ListenAndServe(); err != nil {
 		fmt.Printf("Failed to setup the "+net+" server: %s\n", err.Error())
 	}
@@ -91,12 +88,16 @@ func main() {
 	}
 	if config.Server.SoReuseport != nil {
 		for i := uint32(0); i < *config.Server.SoReuseport; i++ {
-			go serve("tcp", config.Server.Port, &secret, true)
-			go serve("udp", config.Server.Port, &secret, true)
+			for _, listen := range config.Server.Listen {
+				go serve("tcp", listen, &secret, true)
+				go serve("udp", listen, &secret, true)
+			}
 		}
 	} else {
-		go serve("tcp", config.Server.Port, &secret, false)
-		go serve("udp", config.Server.Port, &secret, false)
+		for _, listen := range config.Server.Listen {
+			go serve("tcp", listen, &secret, false)
+			go serve("udp", listen, &secret, false)
+		}
 	}
 	sig := make(chan os.Signal)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)

@@ -17,10 +17,10 @@ type Config struct {
 }
 
 type ServerConfig struct {
-	CPUProfile  *string `yaml:"cpuProfile"`
-	CPU         *int    `yaml:"cpu"`
-	SoReuseport *uint32 `yaml:"soReuseport"`
-	Port        int     `yaml:"port"`
+	CPUProfile  *string  `yaml:"cpuProfile"`
+	CPU         *int     `yaml:"cpu"`
+	SoReuseport *uint32  `yaml:"soReuseport"`
+	Listen      []string `yaml:"listen"`
 }
 
 type ZoneConfig struct {
