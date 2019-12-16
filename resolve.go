@@ -272,7 +272,6 @@ func resolve(zone *Zone, fqdns []string, ipv4 bool, ipv6 bool) []dns.RR {
 	rr := []dns.RR{}
 	for _, fqdn := range fqdns {
 		domain, ok := resolveDomain[zone.Suffix]
-		fmt.Println(fqdn, zone.Suffix)
 		if !ok {
 			continue
 		}
