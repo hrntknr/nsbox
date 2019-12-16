@@ -131,14 +131,14 @@ func handleZone(zone *Zone) func(dns.ResponseWriter, *dns.Msg) {
 				}
 			}
 		}
-		nss := getNS(zone.Suffix, zone)
-		for _, ns := range nss {
-			m.Ns = append(m.Ns, ns)
-		}
-		extras := resolve(zone, zone.NS, true, true)
-		for _, extra := range extras {
-			m.Extra = append(m.Extra, extra)
-		}
+		// nss := getNS(zone.Suffix, zone)
+		// for _, ns := range nss {
+		// 	m.Ns = append(m.Ns, ns)
+		// }
+		// extras := resolve(zone, zone.NS, true, true)
+		// for _, extra := range extras {
+		// 	m.Extra = append(m.Extra, extra)
+		// }
 		w.WriteMsg(m)
 	}
 }
