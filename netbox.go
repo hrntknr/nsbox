@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
 	"encoding/json"
@@ -8,6 +9,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 
@@ -58,6 +60,7 @@ func startNetboxSync(config *Config, zones *[]Zone) error {
 		return err
 	}
 	go func() {
+		initSerial(zones)
 		syncNetbox(config, zones)
 		for range time.Tick(interval) {
 			syncNetbox(config, zones)
@@ -150,11 +153,85 @@ func syncNetbox(config *Config, zones *[]Zone) {
 			}
 		}
 		if ipAddressResp.Next == nil {
-			resolveDomain = newResolveDomain
-			fmt.Println("sync complete.")
+			log.Println("sync complete.")
+			sortAllZone(&newResolveDomain)
+			updateFlag := false
+			for zoneName, zone1 := range newResolveDomain {
+				zone2, ok := resolveDomain[zoneName]
+				if !ok {
+					updateFlag = true
+					log.Printf("update zone: %s\n", zoneName)
+					continue
+				}
+				if !compareZone(zone1, zone2) {
+					updateFlag = true
+					log.Printf("update zone: %s\n", zoneName)
+					updateSerial(zoneName)
+				}
+			}
+			if updateFlag {
+				resolveDomain = newResolveDomain
+			}
 			break
 		}
-		fmt.Println(*ipAddressResp.Next)
+		log.Println(*ipAddressResp.Next)
+	}
+}
+
+func compareZone(zone1 *DNSTree, zone2 *DNSTree) bool {
+	if len(zone1.Records) != len(zone2.Records) {
+		return false
+	}
+	for name, records1 := range zone1.Records {
+		records2, ok := zone2.Records[name]
+		if !ok {
+			return false
+		}
+		if len(records1) != len(records2) {
+			return false
+		}
+		for i, record1 := range records1 {
+			if record1.DNSType != records2[i].DNSType {
+				return false
+			}
+			if record1.DNSType == dns.TypeA {
+				if bytes.Compare(record1.A, records2[i].A) != 0 {
+					return false
+				}
+			}
+			if record1.DNSType == dns.TypeAAAA {
+				if bytes.Compare(record1.AAAA, records2[i].AAAA) != 0 {
+					return false
+				}
+			}
+			if record1.DNSType == dns.TypeCNAME {
+				if record1.CNAME != records2[i].CNAME {
+					return false
+				}
+			}
+		}
+	}
+	return true
+}
+
+func sortAllZone(zones *map[string]*DNSTree) {
+	for _, zone := range *zones {
+		for _, records := range zone.Records {
+			sort.Slice(records, func(i, j int) bool {
+				if records[i].DNSType == records[j].DNSType {
+					switch records[i].DNSType {
+					case dns.TypeA:
+						return bytes.Compare(records[i].A, records[j].A) < 0
+					case dns.TypeAAAA:
+						return bytes.Compare(records[i].AAAA, records[j].AAAA) < 0
+					case dns.TypeCNAME:
+						// invalid
+						return true
+					}
+				}
+				return records[i].DNSType < records[j].DNSType
+			})
+		}
 	}
 }
 

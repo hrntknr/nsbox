@@ -52,12 +52,12 @@ netbox:
 - AAAA
 - TSIG
 - CNAME
+- Serial update
 ### wip
 - TXT
 - MX
 - AXFR
 - dnssec
-- Serial update
 
 ## Copyright and License
 Copyright (c) 2019 Takanori Hirano. Code released under the MIT license.

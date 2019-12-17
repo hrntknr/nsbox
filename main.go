@@ -2,7 +2,6 @@ package main
 
 import (
 	"flag"
-	"fmt"
 	"io/ioutil"
 	"log"
 	"os"
@@ -30,7 +29,7 @@ var (
 func serve(net string, listen string, secret *map[string]string, soreuseport bool) {
 	server := &dns.Server{Addr: listen, Net: net, TsigSecret: *secret, ReusePort: soreuseport}
 	if err := server.ListenAndServe(); err != nil {
-		fmt.Printf("Failed to setup the "+net+" server: %s\n", err.Error())
+		log.Printf("Failed to setup the "+net+" server: %s\n", err.Error())
 	}
 }
 
@@ -96,5 +95,5 @@ func main() {
 	sig := make(chan os.Signal)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
 	s := <-sig
-	fmt.Printf("Signal (%s) received, stopping\n", s)
+	log.Printf("Signal (%s) received, stopping\n", s)
 }
