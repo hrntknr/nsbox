@@ -52,22 +52,39 @@ var resolveDomain map[string]*DNSTree = map[string]*DNSTree{}
 
 var limit = 1000
 
-func startNetboxSync(config *Config, origins []string) error {
+func startNetboxSync(config *Config, zones *[]Zone) error {
 	interval, err := time.ParseDuration(config.Netbox.Interval)
 	if err != nil {
 		return err
 	}
 	go func() {
-		syncNetbox(config, origins)
+		syncNetbox(config, zones)
 		for range time.Tick(interval) {
-			syncNetbox(config, origins)
+			syncNetbox(config, zones)
 		}
 	}()
 	return nil
 }
 
-func syncNetbox(config *Config, origins []string) {
+func injectConfigRecord(tree map[string]*DNSTree, zones *[]Zone) {
+	for _, zone := range *zones {
+		_, ok := tree[zone.Origin]
+		if !ok {
+			tree[zone.Origin] = &DNSTree{
+				Records: map[string][]DNSRecord{},
+			}
+		}
+		for name, record := range zone.Records {
+			for _, r := range record {
+				tree[zone.Origin].Records[name] = append(tree[zone.Origin].Records[name], r)
+			}
+		}
+	}
+}
+
+func syncNetbox(config *Config, zones *[]Zone) {
 	newResolveDomain := map[string]*DNSTree{}
+	injectConfigRecord(newResolveDomain, zones)
 	for i := 0; ; i++ {
 		client := getClient(config)
 		resp, err := client.R().SetQueryParams(map[string]string{
@@ -98,9 +115,9 @@ func syncNetbox(config *Config, origins []string) {
 				log.Print(fmt.Errorf("invalid mode"))
 			}
 			filterdOrigins := []string{}
-			for _, origin := range origins {
-				if strings.HasSuffix(domain, origin) {
-					filterdOrigins = append(filterdOrigins, origin)
+			for _, zone := range *zones {
+				if strings.HasSuffix(domain, zone.Origin) {
+					filterdOrigins = append(filterdOrigins, zone.Origin)
 				}
 			}
 			if len(filterdOrigins) == 0 {
@@ -109,9 +126,7 @@ func syncNetbox(config *Config, origins []string) {
 			origin := filterdOrigins[0]
 			_, ok := newResolveDomain[origin]
 			if !ok {
-				newResolveDomain[origin] = &DNSTree{
-					Records: map[string][]DNSRecord{},
-				}
+				continue
 			}
 			prefix, err := getPrefix(domain, origin)
 			if err != nil {

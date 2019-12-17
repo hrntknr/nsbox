@@ -51,8 +51,8 @@ netbox:
 - A
 - AAAA
 - TSIG
-### wip
 - CNAME
+### wip
 - TXT
 - MX
 - AXFR

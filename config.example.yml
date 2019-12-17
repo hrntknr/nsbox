@@ -30,6 +30,11 @@ zones:
     retry: 900
     expire: 604800
     minTTL: 3600
+  records:
+  - name: info
+    cname: service.example.com
+  - name: shop
+    cname: service.example.com
 netbox:
   host: '192.0.2.0'
   serverName: netbox.example.com

@@ -24,11 +24,17 @@ type ServerConfig struct {
 }
 
 type ZoneConfig struct {
-	Suffix string    `yaml:"suffix"`
-	Origin *string   `yaml:"origin"`
-	SOA    SOAConfig `yaml:"soa"`
-	TTL    *uint32   `yaml:"ttl"`
-	NS     *[]string `yaml:"ns"`
+	Suffix  string                   `yaml:"suffix"`
+	Origin  *string                  `yaml:"origin"`
+	SOA     SOAConfig                `yaml:"soa"`
+	TTL     *uint32                  `yaml:"ttl"`
+	NS      *[]string                `yaml:"ns"`
+	Records *[]AddtionalRecordConfig `yaml:"records"`
+}
+
+type AddtionalRecordConfig struct {
+	Name  string  `yaml:"name"`
+	Cname *string `yaml:"cname"`
 }
 
 type TsigSecretConfig struct {
@@ -62,11 +68,12 @@ type NetboxConfig struct {
 }
 
 type Zone struct {
-	Suffix string   `yaml:"suffix"`
-	Origin *string  `yaml:"origin"`
-	SOA    SOA      `yaml:"soa"`
-	TTL    uint32   `yaml:"ttl"`
-	NS     []string `yaml:"ns"`
+	Suffix  string                 `yaml:"suffix"`
+	Origin  string                 `yaml:"origin"`
+	SOA     SOA                    `yaml:"soa"`
+	TTL     uint32                 `yaml:"ttl"`
+	NS      []string               `yaml:"ns"`
+	Records map[string][]DNSRecord `yaml:"records"`
 }
 
 type SOA struct {
@@ -100,6 +107,21 @@ func handleZone(zone *Zone) func(dns.ResponseWriter, *dns.Msg) {
 
 		m.Authoritative = true
 		for _, q := range r.Question {
+			results, cnameAllLen := resolve(zone, q.Name, []uint16{dns.TypeCNAME})
+			if len(results) != 0 {
+				m.Answer = append(m.Ns, results[0])
+				if q.Qtype != dns.TypeCNAME {
+					cname := *results[0].(*dns.CNAME)
+					glues, allLen := resolve(zone, cname.Target, []uint16{q.Qtype})
+					if allLen != 0 {
+						for _, glue := range glues {
+							m.Answer = append(m.Answer, glue)
+						}
+					}
+				}
+				w.WriteMsg(m)
+				return
+			}
 			switch q.Qtype {
 			case dns.TypeSOA:
 				soa, err := getSOA(q.Name, zone)
@@ -110,7 +132,7 @@ func handleZone(zone *Zone) func(dns.ResponseWriter, *dns.Msg) {
 				}
 				m.Answer = append(m.Answer, soa)
 			case dns.TypeA:
-				results, allLen := resolve(zone, q.Name, true, false)
+				results, allLen := resolve(zone, q.Name, []uint16{dns.TypeA})
 				if len(results) == 0 {
 					if allLen == 0 {
 						m.SetRcode(r, dns.RcodeNameError)
@@ -125,7 +147,7 @@ func handleZone(zone *Zone) func(dns.ResponseWriter, *dns.Msg) {
 					m.Answer = append(m.Answer, result)
 				}
 			case dns.TypeAAAA:
-				results, allLen := resolve(zone, q.Name, false, true)
+				results, allLen := resolve(zone, q.Name, []uint16{dns.TypeAAAA})
 				if len(results) == 0 {
 					if allLen == 0 {
 						m.SetRcode(r, dns.RcodeNameError)
@@ -139,28 +161,31 @@ func handleZone(zone *Zone) func(dns.ResponseWriter, *dns.Msg) {
 				for _, result := range results {
 					m.Answer = append(m.Ns, result)
 				}
+			case dns.TypeCNAME:
+				if cnameAllLen == 0 {
+					m.SetRcode(r, dns.RcodeNameError)
+				} else {
+					m.SetRcode(r, dns.RcodeSuccess)
+				}
+				m.Ns = append(m.Ns, getSOAonError(zone))
+				w.WriteMsg(m)
+				return
 			}
 		}
-		// nss := getNS(zone.Suffix, zone)
-		// for _, ns := range nss {
-		// 	m.Ns = append(m.Ns, ns)
-		// }
-		// extras := resolve(zone, zone.NS, true, true)
-		// for _, extra := range extras {
-		// 	m.Extra = append(m.Extra, extra)
-		// }
 		w.WriteMsg(m)
 	}
 }
 
 func zoneMerge(zoneConfig *ZoneConfig, zoneDefaultConfig *ZoneDefaultConfig) (*Zone, error) {
-	var origin *string
+	var fqdn string = dns.Fqdn(zoneConfig.Suffix)
+	var origin string
 	var soaNS, mBox string
 	var ttl, refresh, retry, expire, minTTL uint32
 	var ns []string = []string{}
 	if zoneConfig.Origin != nil {
-		fqdn := dns.Fqdn(*zoneConfig.Origin)
-		origin = &fqdn
+		origin = dns.Fqdn(*zoneConfig.Origin)
+	} else {
+		origin = dns.Fqdn(zoneConfig.Suffix)
 	}
 	if zoneConfig.TTL != nil {
 		ttl = *zoneConfig.TTL
@@ -222,6 +247,19 @@ func zoneMerge(zoneConfig *ZoneConfig, zoneDefaultConfig *ZoneDefaultConfig) (*Z
 	} else {
 		return nil, fmt.Errorf("soa.minTTL not found")
 	}
+	records := map[string][]DNSRecord{}
+	for _, zc := range *zoneConfig.Records {
+		if zc.Cname != nil {
+			_, ok := records[zc.Name]
+			if !ok {
+				records[zc.Name] = []DNSRecord{}
+			}
+			records[zc.Name] = append(records[zc.Name], DNSRecord{
+				DNSType: dns.TypeCNAME,
+				CNAME:   toFQDN(*zc.Cname, fqdn),
+			})
+		}
+	}
 	return &Zone{
 		SOA: SOA{
 			NS:      dns.Fqdn(soaNS),
@@ -231,11 +269,19 @@ func zoneMerge(zoneConfig *ZoneConfig, zoneDefaultConfig *ZoneDefaultConfig) (*Z
 			Expire:  expire,
 			MinTTL:  minTTL,
 		},
-		Suffix: dns.Fqdn(zoneConfig.Suffix),
-		Origin: origin,
-		TTL:    ttl,
-		NS:     ns,
+		Records: records,
+		Suffix:  fqdn,
+		Origin:  origin,
+		TTL:     ttl,
+		NS:      ns,
 	}, nil
+}
+
+func toFQDN(name string, zone string) string {
+	if dns.IsFqdn(name) {
+		return name
+	}
+	return fmt.Sprintf("%s.%s", name, zone)
 }
 
 func getSOAonError(zone *Zone) *dns.SOA {
@@ -279,7 +325,7 @@ func getNS(qName string, zone *Zone) []dns.RR {
 	return nss
 }
 
-func resolve(zone *Zone, fqdn string, ipv4 bool, ipv6 bool) ([]dns.RR, int) {
+func resolve(zone *Zone, fqdn string, dnsTypes []uint16) ([]dns.RR, int) {
 	rr := []dns.RR{}
 	domain, ok := resolveDomain[zone.Suffix]
 	if !ok {
@@ -290,17 +336,25 @@ func resolve(zone *Zone, fqdn string, ipv4 bool, ipv6 bool) ([]dns.RR, int) {
 		return nil, 0
 	}
 	for _, record := range *records {
-		if ipv4 && record.DNSType == dns.TypeA {
-			rr = append(rr, &dns.A{
-				Hdr: dns.RR_Header{Name: fqdn, Rrtype: dns.TypeA, Class: dns.ClassINET, Ttl: zone.TTL},
-				A:   record.A,
-			})
-		}
-		if ipv6 && record.DNSType == dns.TypeAAAA {
-			rr = append(rr, &dns.AAAA{
-				Hdr:  dns.RR_Header{Name: fqdn, Rrtype: dns.TypeAAAA, Class: dns.ClassINET, Ttl: zone.TTL},
-				AAAA: record.AAAA,
-			})
+		for _, t := range dnsTypes {
+			if t == dns.TypeA && record.DNSType == dns.TypeA {
+				rr = append(rr, &dns.A{
+					Hdr: dns.RR_Header{Name: fqdn, Rrtype: dns.TypeA, Class: dns.ClassINET, Ttl: zone.TTL},
+					A:   record.A,
+				})
+			}
+			if t == dns.TypeAAAA && record.DNSType == dns.TypeAAAA {
+				rr = append(rr, &dns.AAAA{
+					Hdr:  dns.RR_Header{Name: fqdn, Rrtype: dns.TypeAAAA, Class: dns.ClassINET, Ttl: zone.TTL},
+					AAAA: record.AAAA,
+				})
+			}
+			if t == dns.TypeCNAME && record.DNSType == dns.TypeCNAME {
+				rr = append(rr, &dns.CNAME{
+					Hdr:    dns.RR_Header{Name: fqdn, Rrtype: dns.TypeCNAME, Class: dns.ClassINET, Ttl: zone.TTL},
+					Target: record.CNAME,
+				})
+			}
 		}
 	}
 	sortRR(rr)

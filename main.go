@@ -62,23 +62,17 @@ func main() {
 		runtime.GOMAXPROCS(*config.Server.CPU)
 	}
 
-	origins := []string{}
+	zones := []Zone{}
 	for _, zoneConfig := range config.Zones {
 		zone, err := zoneMerge(&zoneConfig, &config.ZoneDefault)
 		if err != nil {
 			log.Fatal(err)
 		}
-		var origin string
-		if zone.Origin == nil {
-			origin = zone.Suffix
-		} else {
-			origin = *zone.Origin
-		}
-		dns.HandleFunc(origin, handleZone(zone))
-		origins = append(origins, origin)
+		dns.HandleFunc(zone.Origin, handleZone(zone))
+		zones = append(zones, *zone)
 	}
 
-	if err := startNetboxSync(config, origins); err != nil {
+	if err := startNetboxSync(config, &zones); err != nil {
 		log.Fatal(err)
 	}
 
