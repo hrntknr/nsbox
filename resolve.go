@@ -10,10 +10,16 @@ import (
 
 type Config struct {
 	Server      ServerConfig       `yaml:"server"`
+	DataStore   DataStoreConfig    `yaml:"dataStore"`
 	ZoneDefault ZoneDefaultConfig  `yaml:"zoneDefault"`
 	Zones       []ZoneConfig       `yaml:"zones"`
 	TsigSecrets []TsigSecretConfig `yaml:"tsigSecrets"`
 	Netbox      NetboxConfig       `yaml:"netbox"`
+}
+
+type DataStoreConfig struct {
+	Mode string `yaml:"mode"`
+	Path string `yaml:"path"`
 }
 
 type ServerConfig struct {

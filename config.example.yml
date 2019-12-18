@@ -1,6 +1,9 @@
 server:
   listen:
   - 127.0.0.1:53
+dataStore:
+  mode: yaml
+  path: ./store.yml
 tsigSecrets:
 - name: example.com.
   secret: LSbfNkN9niiVrTl4AiVvm/sCcoh4m+jFB99qR2XYaFk5j7goL4Xiy1cfezpsT+3KUAMGq9OJcKRYq5yYzq8nZA==

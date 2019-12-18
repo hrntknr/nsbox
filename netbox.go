@@ -27,7 +27,7 @@ type IPAddressResp struct {
 }
 
 type DNSTree struct {
-	Records map[string][]DNSRecord
+	Records map[string][]DNSRecord `yaml:"records"`
 }
 
 func (tree *DNSTree) search(fqdn string, origin string) *[]DNSRecord {
@@ -44,10 +44,10 @@ func (tree *DNSTree) search(fqdn string, origin string) *[]DNSRecord {
 }
 
 type DNSRecord struct {
-	DNSType uint16
-	A       net.IP
-	AAAA    net.IP
-	CNAME   string
+	DNSType uint16 `yaml:"dnsType,omitempty"`
+	A       net.IP `yaml:"a,omitempty"`
+	AAAA    net.IP `yaml:"aaaa,omitempty"`
+	CNAME   string `yaml:"cname,omitempty"`
 }
 
 var resolveDomain map[string]*DNSTree = map[string]*DNSTree{}
@@ -61,9 +61,19 @@ func startNetboxSync(config *Config, zones *[]Zone) error {
 	}
 	go func() {
 		initSerial(zones)
-		syncNetbox(config, zones)
+		ds := getDataStore(&config.DataStore, zones)
+		if ds != nil {
+			for _, z := range *zones {
+				zd, err := ds.getZone(z.Suffix)
+				if err == nil {
+					setSerial(z.Suffix, zd.Serial)
+					resolveDomain[z.Suffix] = zd.Tree
+				}
+			}
+		}
+		syncNetbox(config, zones, ds)
 		for range time.Tick(interval) {
-			syncNetbox(config, zones)
+			syncNetbox(config, zones, ds)
 		}
 	}()
 	return nil
@@ -85,7 +95,7 @@ func injectConfigRecord(tree map[string]*DNSTree, zones *[]Zone) {
 	}
 }
 
-func syncNetbox(config *Config, zones *[]Zone) {
+func syncNetbox(config *Config, zones *[]Zone, ds dataStore) {
 	newResolveDomain := map[string]*DNSTree{}
 	injectConfigRecord(newResolveDomain, zones)
 	for i := 0; ; i++ {
@@ -161,12 +171,28 @@ func syncNetbox(config *Config, zones *[]Zone) {
 				if !ok {
 					updateFlag = true
 					log.Printf("update zone: %s\n", zoneName)
+					if ds != nil {
+						if err := ds.setZone(zoneName, &zoneStoreData{
+							Serial: getSerial(zoneName),
+							Tree:   zone1,
+						}); err != nil {
+							log.Println(err)
+						}
+					}
 					continue
 				}
 				if !compareZone(zone1, zone2) {
 					updateFlag = true
 					log.Printf("update zone: %s\n", zoneName)
 					updateSerial(zoneName)
+					if ds != nil {
+						if err := ds.setZone(zoneName, &zoneStoreData{
+							Serial: getSerial(zoneName),
+							Tree:   zone1,
+						}); err != nil {
+							log.Println(err)
+						}
+					}
 				}
 			}
 			if updateFlag {
@@ -179,6 +205,9 @@ func syncNetbox(config *Config, zones *[]Zone) {
 }
 
 func compareZone(zone1 *DNSTree, zone2 *DNSTree) bool {
+	if zone1 == nil || zone2 == nil {
+		return false
+	}
 	if len(zone1.Records) != len(zone2.Records) {
 		return false
 	}

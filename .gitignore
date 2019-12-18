@@ -1,4 +1,5 @@
 /config.yml
+/store.yml
 # Binaries for programs and plugins
 *.exe
 *.exe~
