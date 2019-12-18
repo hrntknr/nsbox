@@ -28,6 +28,7 @@ type storeData struct {
 
 type zoneStoreData struct {
 	Serial uint32   `yaml:"serial"`
+	Origin string   `yaml:"origin"`
 	Tree   *DNSTree `yaml:"tree"`
 }
 

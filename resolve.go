@@ -318,7 +318,7 @@ func toFQDN(name string, zone string) string {
 
 func getSOAonError(zone *Zone) *dns.SOA {
 	return &dns.SOA{
-		Hdr:     dns.RR_Header{Name: zone.Suffix, Rrtype: dns.TypeSOA, Class: dns.ClassINET, Ttl: zone.TTL},
+		Hdr:     dns.RR_Header{Name: zone.Origin, Rrtype: dns.TypeSOA, Class: dns.ClassINET, Ttl: zone.TTL},
 		Ns:      zone.SOA.NS,
 		Mbox:    zone.SOA.MBox,
 		Serial:  getSerial(zone.Suffix),
@@ -363,7 +363,11 @@ func resolve(zone *Zone, fqdn string, dnsTypes []uint16) ([]dns.RR, int) {
 	if !ok {
 		return nil, 0
 	}
-	records := domain.search(fqdn, zone.Suffix)
+	prefix, err := getPrefix(fqdn, zone.Origin)
+	if err != nil {
+		return nil, 0
+	}
+	records := domain.search(prefix, zone.Suffix)
 	if records == nil {
 		return nil, 0
 	}

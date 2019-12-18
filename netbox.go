@@ -30,16 +30,12 @@ type DNSTree struct {
 	Records map[string][]DNSRecord `yaml:"records"`
 }
 
-func (tree *DNSTree) search(fqdn string, origin string) *[]DNSRecord {
-	tree, ok := resolveDomain[origin]
+func (tree *DNSTree) search(prefix string, suffix string) *[]DNSRecord {
+	tree, ok := resolveDomain[suffix]
 	if !ok {
 		return nil
 	}
-	prefix, err := getPrefix(fqdn, origin)
-	if err != nil {
-		return nil
-	}
-	result := resolveDomain[origin].Records[prefix]
+	result := resolveDomain[suffix].Records[prefix]
 	return &result
 }
 
@@ -82,15 +78,15 @@ func startNetboxSync(config *Config, zones *[]Zone) error {
 
 func injectConfigRecord(tree map[string]*DNSTree, zones *[]Zone) {
 	for _, zone := range *zones {
-		_, ok := tree[zone.Origin]
+		_, ok := tree[zone.Suffix]
 		if !ok {
-			tree[zone.Origin] = &DNSTree{
+			tree[zone.Suffix] = &DNSTree{
 				Records: map[string][]DNSRecord{},
 			}
 		}
 		for name, record := range zone.Records {
 			for _, r := range record {
-				tree[zone.Origin].Records[name] = append(tree[zone.Origin].Records[name], r)
+				tree[zone.Suffix].Records[name] = append(tree[zone.Suffix].Records[name], r)
 			}
 		}
 	}
@@ -128,36 +124,36 @@ func syncNetbox(config *Config, zones *[]Zone, ds dataStore) {
 			default:
 				log.Print(fmt.Errorf("invalid mode"))
 			}
-			filterdOrigins := []string{}
+			filterdSuffix := []string{}
 			for _, zone := range *zones {
-				if strings.HasSuffix(domain, zone.Origin) {
-					filterdOrigins = append(filterdOrigins, zone.Origin)
+				if strings.HasSuffix(domain, zone.Suffix) {
+					filterdSuffix = append(filterdSuffix, zone.Suffix)
 				}
 			}
-			if len(filterdOrigins) == 0 {
+			if len(filterdSuffix) == 0 {
 				continue
 			}
-			origin := filterdOrigins[0]
-			_, ok := newResolveDomain[origin]
+			suffix := filterdSuffix[0]
+			_, ok := newResolveDomain[suffix]
 			if !ok {
 				continue
 			}
-			prefix, err := getPrefix(domain, origin)
+			prefix, err := getPrefix(domain, suffix)
 			if err != nil {
 				continue
 			}
-			_, ok = newResolveDomain[origin].Records[prefix]
+			_, ok = newResolveDomain[suffix].Records[prefix]
 			if !ok {
-				newResolveDomain[origin].Records[prefix] = []DNSRecord{}
+				newResolveDomain[suffix].Records[prefix] = []DNSRecord{}
 			}
 			ip := net.ParseIP(strings.Split(result.Address, "/")[0])
 			if ip.To4() != nil {
-				newResolveDomain[origin].Records[prefix] = append(newResolveDomain[origin].Records[prefix], DNSRecord{
+				newResolveDomain[suffix].Records[prefix] = append(newResolveDomain[suffix].Records[prefix], DNSRecord{
 					DNSType: dns.TypeA,
 					A:       ip,
 				})
 			} else {
-				newResolveDomain[origin].Records[prefix] = append(newResolveDomain[origin].Records[prefix], DNSRecord{
+				newResolveDomain[suffix].Records[prefix] = append(newResolveDomain[suffix].Records[prefix], DNSRecord{
 					DNSType: dns.TypeAAAA,
 					AAAA:    ip,
 				})
@@ -272,14 +268,14 @@ func sortAllZone(zones *map[string]*DNSTree) {
 	}
 }
 
-func getPrefix(fqdn string, origin string) (prefix string, err error) {
-	if fqdn == origin {
+func getPrefix(fqdn string, suffix string) (prefix string, err error) {
+	if fqdn == suffix {
 		return "", nil
 	}
-	if !strings.HasSuffix(fqdn, "."+origin) {
-		return "", fmt.Errorf("invalid origin")
+	if !strings.HasSuffix(fqdn, "."+suffix) {
+		return "", fmt.Errorf("invalid suffix")
 	}
-	return fqdn[:len(fqdn)-len(origin)-1], nil
+	return fqdn[:len(fqdn)-len(suffix)-1], nil
 }
 
 func getClient(config *Config) *resty.Client {
