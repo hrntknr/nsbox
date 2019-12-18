@@ -48,6 +48,7 @@ type DNSRecord struct {
 	A       net.IP `yaml:"a,omitempty"`
 	AAAA    net.IP `yaml:"aaaa,omitempty"`
 	CNAME   string `yaml:"cname,omitempty"`
+	TXT     string `yaml:"txt,omitempty"`
 }
 
 var resolveDomain map[string]*DNSTree = map[string]*DNSTree{}
@@ -238,6 +239,11 @@ func compareZone(zone1 *DNSTree, zone2 *DNSTree) bool {
 					return false
 				}
 			}
+			if record1.DNSType == dns.TypeTXT {
+				if record1.TXT != records2[i].TXT {
+					return false
+				}
+			}
 		}
 	}
 	return true
@@ -253,6 +259,8 @@ func sortAllZone(zones *map[string]*DNSTree) {
 						return bytes.Compare(records[i].A, records[j].A) < 0
 					case dns.TypeAAAA:
 						return bytes.Compare(records[i].AAAA, records[j].AAAA) < 0
+					case dns.TypeTXT:
+						return records[i].TXT < records[j].TXT
 					case dns.TypeCNAME:
 						// invalid
 						return true

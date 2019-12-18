@@ -53,8 +53,8 @@ netbox:
 - TSIG
 - CNAME
 - Serial update
-### wip
 - TXT
+### wip
 - MX
 - AXFR
 - dnssec

@@ -40,7 +40,8 @@ type ZoneConfig struct {
 
 type AddtionalRecordConfig struct {
 	Name  string  `yaml:"name"`
-	Cname *string `yaml:"cname"`
+	CNAME *string `yaml:"cname"`
+	TXT   *string `yaml:"txt"`
 }
 
 type TsigSecretConfig struct {
@@ -165,7 +166,22 @@ func handleZone(zone *Zone) func(dns.ResponseWriter, *dns.Msg) {
 					return
 				}
 				for _, result := range results {
-					m.Answer = append(m.Ns, result)
+					m.Answer = append(m.Answer, result)
+				}
+			case dns.TypeTXT:
+				results, allLen := resolve(zone, q.Name, []uint16{dns.TypeTXT})
+				if len(results) == 0 {
+					if allLen == 0 {
+						m.SetRcode(r, dns.RcodeNameError)
+					} else {
+						m.SetRcode(r, dns.RcodeSuccess)
+					}
+					m.Ns = append(m.Ns, getSOAonError(zone))
+					w.WriteMsg(m)
+					return
+				}
+				for _, result := range results {
+					m.Answer = append(m.Answer, result)
 				}
 			case dns.TypeCNAME:
 				if cnameAllLen == 0 {
@@ -255,14 +271,24 @@ func zoneMerge(zoneConfig *ZoneConfig, zoneDefaultConfig *ZoneDefaultConfig) (*Z
 	}
 	records := map[string][]DNSRecord{}
 	for _, zc := range *zoneConfig.Records {
-		if zc.Cname != nil {
+		if zc.CNAME != nil {
 			_, ok := records[zc.Name]
 			if !ok {
 				records[zc.Name] = []DNSRecord{}
 			}
 			records[zc.Name] = append(records[zc.Name], DNSRecord{
 				DNSType: dns.TypeCNAME,
-				CNAME:   toFQDN(*zc.Cname, fqdn),
+				CNAME:   toFQDN(*zc.CNAME, fqdn),
+			})
+		}
+		if zc.TXT != nil {
+			_, ok := records[zc.Name]
+			if !ok {
+				records[zc.Name] = []DNSRecord{}
+			}
+			records[zc.Name] = append(records[zc.Name], DNSRecord{
+				DNSType: dns.TypeTXT,
+				TXT:     *zc.TXT,
 			})
 		}
 	}
@@ -353,6 +379,12 @@ func resolve(zone *Zone, fqdn string, dnsTypes []uint16) ([]dns.RR, int) {
 				rr = append(rr, &dns.AAAA{
 					Hdr:  dns.RR_Header{Name: fqdn, Rrtype: dns.TypeAAAA, Class: dns.ClassINET, Ttl: zone.TTL},
 					AAAA: record.AAAA,
+				})
+			}
+			if t == dns.TypeTXT && record.DNSType == dns.TypeTXT {
+				rr = append(rr, &dns.TXT{
+					Hdr: dns.RR_Header{Name: fqdn, Rrtype: dns.TypeTXT, Class: dns.ClassINET, Ttl: zone.TTL},
+					Txt: []string{record.TXT},
 				})
 			}
 			if t == dns.TypeCNAME && record.DNSType == dns.TypeCNAME {
