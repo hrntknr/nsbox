@@ -16,6 +16,7 @@ type Config struct {
 	Zones       []ZoneConfig       `yaml:"zones"`
 	TsigSecrets []TsigSecretConfig `yaml:"tsigSecrets"`
 	Netbox      NetboxConfig       `yaml:"netbox"`
+	Slack       SlackConfig        `yaml:"slack"`
 }
 
 type DataStoreConfig struct {
@@ -97,6 +98,14 @@ type SOA struct {
 	Retry   uint32 `yaml:"retry"`
 	Expire  uint32 `yaml:"expire"`
 	MinTTL  uint32 `yaml:"minTTL"`
+}
+
+type SlackConfig struct {
+	WebhookURL string `yaml:"webhookURL"`
+	Channel    string `yaml:"channel"`
+	Name       string `yaml:"name"`
+	IconURL    string `yaml:"iconURL"`
+	IcomEmoji  string `yaml:"iconEmoji"`
 }
 
 func handleZone(zone *Zone) func(dns.ResponseWriter, *dns.Msg) {

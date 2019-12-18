@@ -55,6 +55,7 @@ netbox:
 - Serial update
 - TXT
 - webhook
+- slack integration
 ### wip
 - MX
 - AXFR

@@ -55,3 +55,8 @@ netbox:
   token: abcdefghijklmnopqrstuvwxyabcdefghijklmno
   mode: description
   interval: 60m
+slack:
+  webhookURL: https://hooks.slack.com/services/XXXXXXXXX/XXXXXXXXX/XXXXXXXXXXXXXXXXXXXXXXXX
+  channel: general
+  name: nsbox
+  iconEmoji: thinking_face

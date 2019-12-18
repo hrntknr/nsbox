@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/go-resty/resty/v2"
+	"github.com/google/go-cmp/cmp"
 	"github.com/miekg/dns"
 )
 
@@ -196,7 +197,8 @@ func syncNetbox(config *Config, zones *[]Zone, ds dataStore) {
 				}
 				if !compareZone(zone1, zone2) {
 					updateFlag = true
-					log.Printf("update zone: %s\n", zoneName)
+					diff := cmp.Diff(zone2.Records, zone1.Records)
+					fmt.Print(diff)
 					updateSerial(zoneName)
 					if ds != nil {
 						if err := ds.setZone(zoneName, &zoneStoreData{
@@ -205,6 +207,11 @@ func syncNetbox(config *Config, zones *[]Zone, ds dataStore) {
 						}); err != nil {
 							log.Println(err)
 						}
+					}
+					log.Printf("update zone: %s serial: %d\n", zoneName, getSerial(zoneName))
+					err := notifySlack(&config.Slack, zoneName, getSerial(zoneName), diff)
+					if err != nil {
+						fmt.Println(err)
 					}
 				}
 			}
