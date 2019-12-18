@@ -54,6 +54,7 @@ netbox:
 - CNAME
 - Serial update
 - TXT
+- webhook
 ### wip
 - MX
 - AXFR

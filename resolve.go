@@ -10,6 +10,7 @@ import (
 
 type Config struct {
 	Server      ServerConfig       `yaml:"server"`
+	Webhook     WebhookConfig      `yaml:"webhook"`
 	DataStore   DataStoreConfig    `yaml:"dataStore"`
 	ZoneDefault ZoneDefaultConfig  `yaml:"zoneDefault"`
 	Zones       []ZoneConfig       `yaml:"zones"`
@@ -20,6 +21,12 @@ type Config struct {
 type DataStoreConfig struct {
 	Mode string `yaml:"mode"`
 	Path string `yaml:"path"`
+}
+
+type WebhookConfig struct {
+	Listen    string   `yaml:"listen"`
+	Timeout   string   `yaml:"timeout"`
+	AllowFrom []string `yaml:"allowFrom"`
 }
 
 type ServerConfig struct {

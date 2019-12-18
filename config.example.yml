@@ -1,6 +1,12 @@
 server:
   listen:
   - 127.0.0.1:53
+webhook:
+  listen: :8080
+  timeout: 30s
+  allowFrom:
+  - 127.0.0.1/8
+  - ::1/128
 dataStore:
   mode: yaml
   path: ./store.yml
@@ -48,4 +54,4 @@ netbox:
   verifyTLS: true
   token: abcdefghijklmnopqrstuvwxyabcdefghijklmno
   mode: description
-  interval: 1m
+  interval: 60m

@@ -69,9 +69,25 @@ func startNetboxSync(config *Config, zones *[]Zone) error {
 			}
 		}
 		syncNetbox(config, zones, ds)
-		for range time.Tick(interval) {
-			syncNetbox(config, zones, ds)
+		if config.Webhook.Listen != "" {
+			go func() {
+				ch, err := startListen(&config.Webhook)
+				if err != nil {
+					log.Print(err)
+					return
+				}
+				for {
+					<-ch
+					go syncNetbox(config, zones, ds)
+				}
+			}()
 		}
+		go func() {
+			for range time.Tick(interval) {
+				go syncNetbox(config, zones, ds)
+			}
+		}()
+		select {}
 	}()
 	return nil
 }
