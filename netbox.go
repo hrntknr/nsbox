@@ -273,6 +273,9 @@ func sortAllZone(zones *map[string]*DNSTree) {
 }
 
 func getPrefix(fqdn string, origin string) (prefix string, err error) {
+	if fqdn == origin {
+		return "", nil
+	}
 	if !strings.HasSuffix(fqdn, "."+origin) {
 		return "", fmt.Errorf("invalid origin")
 	}

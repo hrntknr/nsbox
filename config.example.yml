@@ -38,7 +38,7 @@ zones:
     cname: service.example.com
   - name: shop
     cname: service.example.com
-  - txt: v=spf1 include:info.example.co.jp
+  - txt: v=spf1 include:info.example.com
   - name: info
     txt: v=spf1 ip4:192.0.2.200 ~all
 netbox:
