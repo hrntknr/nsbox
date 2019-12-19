@@ -197,8 +197,11 @@ func syncNetbox(config *Config, zones *[]Zone, ds dataStore) {
 				}
 				if !compareZone(zone1, zone2) {
 					updateFlag = true
-					diff := cmp.Diff(zone2.Records, zone1.Records)
-					fmt.Print(diff)
+					diff := ""
+					if zone2 != nil {
+						diff = cmp.Diff(zone2.Records, zone1.Records)
+						fmt.Print(diff)
+					}
 					updateSerial(zoneName)
 					if ds != nil {
 						if err := ds.setZone(zoneName, &zoneStoreData{
@@ -208,11 +211,11 @@ func syncNetbox(config *Config, zones *[]Zone, ds dataStore) {
 							log.Println(err)
 						}
 					}
-					log.Printf("update zone: %s serial: %d\n", zoneName, getSerial(zoneName))
 					err := notifySlack(&config.Slack, zoneName, getSerial(zoneName), diff)
 					if err != nil {
 						fmt.Println(err)
 					}
+					log.Printf("update zone: %s serial: %d\n", zoneName, getSerial(zoneName))
 				}
 			}
 			if updateFlag {

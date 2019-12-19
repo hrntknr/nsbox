@@ -40,7 +40,7 @@ func newYamlDataStore(path string, zones *[]Zone) dataStore {
 	if err != nil {
 		zoneData := map[string]zoneStoreData{}
 		for _, zone := range *zones {
-			zoneData[zone.Origin] = zoneStoreData{}
+			zoneData[zone.Suffix] = zoneStoreData{}
 		}
 		yd.data = &storeData{
 			Zones: zoneData,

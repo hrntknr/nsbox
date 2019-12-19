@@ -286,26 +286,28 @@ func zoneMerge(zoneConfig *ZoneConfig, zoneDefaultConfig *ZoneDefaultConfig) (*Z
 		return nil, fmt.Errorf("soa.minTTL not found")
 	}
 	records := map[string][]DNSRecord{}
-	for _, zc := range *zoneConfig.Records {
-		if zc.CNAME != nil {
-			_, ok := records[zc.Name]
-			if !ok {
-				records[zc.Name] = []DNSRecord{}
+	if zoneConfig.Records != nil {
+		for _, zc := range *zoneConfig.Records {
+			if zc.CNAME != nil {
+				_, ok := records[zc.Name]
+				if !ok {
+					records[zc.Name] = []DNSRecord{}
+				}
+				records[zc.Name] = append(records[zc.Name], DNSRecord{
+					DNSType: dns.TypeCNAME,
+					CNAME:   toFQDN(*zc.CNAME, fqdn),
+				})
 			}
-			records[zc.Name] = append(records[zc.Name], DNSRecord{
-				DNSType: dns.TypeCNAME,
-				CNAME:   toFQDN(*zc.CNAME, fqdn),
-			})
-		}
-		if zc.TXT != nil {
-			_, ok := records[zc.Name]
-			if !ok {
-				records[zc.Name] = []DNSRecord{}
+			if zc.TXT != nil {
+				_, ok := records[zc.Name]
+				if !ok {
+					records[zc.Name] = []DNSRecord{}
+				}
+				records[zc.Name] = append(records[zc.Name], DNSRecord{
+					DNSType: dns.TypeTXT,
+					TXT:     *zc.TXT,
+				})
 			}
-			records[zc.Name] = append(records[zc.Name], DNSRecord{
-				DNSType: dns.TypeTXT,
-				TXT:     *zc.TXT,
-			})
 		}
 	}
 	return &Zone{
