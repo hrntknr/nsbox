@@ -17,7 +17,7 @@ func getHandler(ch chan struct{}, ts string, allowFrom []*net.IPNet) (func(w htt
 	}
 	var access time.Time
 	return func(w http.ResponseWriter, r *http.Request) {
-		ip, err := ParseIP(r.RemoteAddr)
+		ip, err := parseIP(r.RemoteAddr)
 		if err != nil {
 			w.WriteHeader(http.StatusUnauthorized)
 			w.Write([]byte{})
@@ -49,7 +49,7 @@ func getHandler(ch chan struct{}, ts string, allowFrom []*net.IPNet) (func(w htt
 	}, nil
 }
 
-func ParseIP(s string) (net.IP, error) {
+func parseIP(s string) (net.IP, error) {
 	ip, _, err := net.SplitHostPort(s)
 	if err != nil {
 		return nil, err
@@ -62,7 +62,7 @@ func ParseIP(s string) (net.IP, error) {
 	return ip2, nil
 }
 
-func startListen(wc *WebhookConfig) (chan struct{}, error) {
+func startListen(wc *webhookConfig) (chan struct{}, error) {
 	ch := make(chan struct{})
 	mux := http.NewServeMux()
 	if wc.Timeout == "" {

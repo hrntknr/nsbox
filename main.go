@@ -17,7 +17,7 @@ import (
 var (
 	configPath = flag.String("c", "./config.yml", "path of configuration file")
 	config     = &Config{
-		Netbox: NetboxConfig{
+		Netbox: netboxConfig{
 			UseTLS:    false,
 			VerifyTLS: true,
 			Mode:      "description",
@@ -61,17 +61,18 @@ func main() {
 		runtime.GOMAXPROCS(*config.Server.CPU)
 	}
 
-	zones := []Zone{}
+	zms := map[string]*zoneManager{}
 	for _, zoneConfig := range config.Zones {
 		zone, err := zoneMerge(&zoneConfig, &config.ZoneDefault)
 		if err != nil {
 			log.Fatal(err)
 		}
-		dns.HandleFunc(zone.Origin, handleZone(zone))
-		zones = append(zones, *zone)
+		zm := newZoneManager(zone)
+		dns.HandleFunc(zone.Origin, zm.handler)
+		zms[zm.ZoneConfig.Suffix] = zm
 	}
 
-	if err := startNetboxSync(config, &zones); err != nil {
+	if err := startNetboxSync(config, &zms); err != nil {
 		log.Fatal(err)
 	}
 

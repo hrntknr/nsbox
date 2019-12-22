@@ -7,9 +7,18 @@
 server:
   listen:
   - 127.0.0.1:53
+webhook:
+  listen: :8080
+  timeout: 30s
+  allowFrom:
+  - 127.0.0.1/8
+  - ::1/128
+dataStore:
+  mode: yaml
+  path: ./store.yml
 tsigSecrets:
 - name: example.com.
-  secret: LSbfNkN9niiVrTl4AiVvm/sCcoh4m+jFB99qR2XYaFk5j7goL4Xiy1cfezpsT+3KUAMGq9OJcKRYq5yYzq8nZA==
+  secret: so6ZGir4GPAqINNh9U5c3A==
 zoneDefault:
   ttl: 3600
   ns:
@@ -36,6 +45,14 @@ zones:
     retry: 900
     expire: 604800
     minTTL: 3600
+  records:
+  - name: info
+    cname: service.example.com
+  - name: shop
+    cname: service.example.com
+  - txt: v=spf1 include:info.example.com
+  - name: info
+    txt: v=spf1 ip4:192.0.2.200 ~all
 netbox:
   host: '192.0.2.0'
   serverName: netbox.example.com
@@ -43,7 +60,12 @@ netbox:
   verifyTLS: true
   token: abcdefghijklmnopqrstuvwxyabcdefghijklmno
   mode: description
-  interval: 1m
+  interval: 60m
+slack:
+  webhookURL: https://hooks.slack.com/services/XXXXXXXXX/XXXXXXXXX/XXXXXXXXXXXXXXXXXXXXXXXX
+  channel: general
+  name: nsbox
+  iconEmoji: thinking_face
 ```
 
 ## Implementation status

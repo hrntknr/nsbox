@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-func notifySlack(config *SlackConfig, zoneName string, serial uint32, diff string) error {
+func notifySlack(config *slackConfig, zoneName string, serial uint32, diff string) error {
 	if config.WebhookURL == "" {
 		return nil
 	}

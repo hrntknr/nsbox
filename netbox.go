@@ -18,7 +18,7 @@ import (
 	"github.com/miekg/dns"
 )
 
-type IPAddressResp struct {
+type ipAddressResp struct {
 	Next    *string `json:"next"`
 	Results []struct {
 		Address     string `json:"address"`
@@ -27,20 +27,30 @@ type IPAddressResp struct {
 	} `json:"results"`
 }
 
-type DNSTree struct {
-	Records map[string][]DNSRecord `yaml:"records"`
+func newDNSTree() *dnsTree {
+	return &dnsTree{
+		Records: map[string][]dnsRecord{},
+	}
 }
 
-func (tree *DNSTree) search(prefix string, suffix string) *[]DNSRecord {
-	tree, ok := resolveDomain[suffix]
-	if !ok {
-		return nil
-	}
-	result := resolveDomain[suffix].Records[prefix]
+type dnsTree struct {
+	Records map[string][]dnsRecord `yaml:"records"`
+}
+
+func (tree *dnsTree) search(prefix string) *[]dnsRecord {
+	result := tree.Records[prefix]
 	return &result
 }
 
-type DNSRecord struct {
+func (tree *dnsTree) addRecords(name string, r dnsRecord) {
+	_, ok := tree.Records[name]
+	if !ok {
+		tree.Records[name] = []dnsRecord{}
+	}
+	tree.Records[name] = append(tree.Records[name], r)
+}
+
+type dnsRecord struct {
 	DNSType uint16 `yaml:"dnsType,omitempty"`
 	A       net.IP `yaml:"a,omitempty"`
 	AAAA    net.IP `yaml:"aaaa,omitempty"`
@@ -48,28 +58,29 @@ type DNSRecord struct {
 	TXT     string `yaml:"txt,omitempty"`
 }
 
-var resolveDomain map[string]*DNSTree = map[string]*DNSTree{}
-
 var limit = 1000
 
-func startNetboxSync(config *Config, zones *[]Zone) error {
+func startNetboxSync(config *Config, zms *map[string]*zoneManager) error {
 	interval, err := time.ParseDuration(config.Netbox.Interval)
 	if err != nil {
 		return err
 	}
 	go func() {
-		initSerial(zones)
-		ds := getDataStore(&config.DataStore, zones)
+		for _, zm := range *zms {
+			zm.initSerial()
+		}
+		ds := getDataStore(&config.DataStore, zms)
 		if ds != nil {
-			for _, z := range *zones {
-				zd, err := ds.getZone(z.Suffix)
+			for suffix, zm := range *zms {
+				zd, err := ds.getZone(zm.ZoneConfig.Suffix)
 				if err == nil {
-					setSerial(z.Suffix, zd.Serial)
-					resolveDomain[z.Suffix] = zd.Tree
+					zm.Tree = *zd.Tree
+					zm.setSerial(zd.Serial)
 				}
+				(*zms)[suffix] = zm
 			}
 		}
-		syncNetbox(config, zones, ds)
+		go syncNetbox(config, zms, ds)
 		if config.Webhook.Listen != "" {
 			go func() {
 				ch, err := startListen(&config.Webhook)
@@ -79,13 +90,13 @@ func startNetboxSync(config *Config, zones *[]Zone) error {
 				}
 				for {
 					<-ch
-					go syncNetbox(config, zones, ds)
+					go syncNetbox(config, zms, ds)
 				}
 			}()
 		}
 		go func() {
 			for range time.Tick(interval) {
-				go syncNetbox(config, zones, ds)
+				go syncNetbox(config, zms, ds)
 			}
 		}()
 		select {}
@@ -93,25 +104,19 @@ func startNetboxSync(config *Config, zones *[]Zone) error {
 	return nil
 }
 
-func injectConfigRecord(tree map[string]*DNSTree, zones *[]Zone) {
-	for _, zone := range *zones {
-		_, ok := tree[zone.Suffix]
+func syncNetbox(config *Config, zms *map[string]*zoneManager, ds dataStore) {
+	newTree := map[string]*dnsTree{}
+	for _, zm := range *zms {
+		_, ok := newTree[zm.ZoneConfig.Suffix]
 		if !ok {
-			tree[zone.Suffix] = &DNSTree{
-				Records: map[string][]DNSRecord{},
-			}
+			newTree[zm.ZoneConfig.Suffix] = newDNSTree()
 		}
-		for name, record := range zone.Records {
+		for name, record := range zm.ZoneConfig.Records {
 			for _, r := range record {
-				tree[zone.Suffix].Records[name] = append(tree[zone.Suffix].Records[name], r)
+				newTree[zm.ZoneConfig.Suffix].addRecords(name, r)
 			}
 		}
 	}
-}
-
-func syncNetbox(config *Config, zones *[]Zone, ds dataStore) {
-	newResolveDomain := map[string]*DNSTree{}
-	injectConfigRecord(newResolveDomain, zones)
 	for i := 0; ; i++ {
 		client := getClient(config)
 		resp, err := client.R().SetQueryParams(map[string]string{
@@ -121,7 +126,7 @@ func syncNetbox(config *Config, zones *[]Zone, ds dataStore) {
 		if err != nil {
 			log.Println(err)
 		}
-		ipAddressResp := IPAddressResp{}
+		ipAddressResp := ipAddressResp{}
 		if err := json.Unmarshal(resp.Body(), &ipAddressResp); err != nil {
 			log.Print(err)
 			break
@@ -141,85 +146,71 @@ func syncNetbox(config *Config, zones *[]Zone, ds dataStore) {
 			default:
 				log.Print(fmt.Errorf("invalid mode"))
 			}
-			filterdSuffix := []string{}
-			for _, zone := range *zones {
-				if strings.HasSuffix(domain, zone.Suffix) {
-					filterdSuffix = append(filterdSuffix, zone.Suffix)
+			for _, zm := range *zms {
+				if zm.includesBySuffix(domain) {
+					_, ok := newTree[zm.ZoneConfig.Suffix]
+					if !ok {
+						continue
+					}
+					prefix, err := zm.getPrefixBySuffix(domain)
+					if err != nil {
+						continue
+					}
+					ip := net.ParseIP(strings.Split(result.Address, "/")[0])
+					if ip.To4() != nil {
+						newTree[zm.ZoneConfig.Suffix].addRecords(prefix, dnsRecord{
+							DNSType: dns.TypeA,
+							A:       ip,
+						})
+					} else {
+						newTree[zm.ZoneConfig.Suffix].addRecords(prefix, dnsRecord{
+							DNSType: dns.TypeAAAA,
+							AAAA:    ip,
+						})
+					}
 				}
-			}
-			if len(filterdSuffix) == 0 {
-				continue
-			}
-			suffix := filterdSuffix[0]
-			_, ok := newResolveDomain[suffix]
-			if !ok {
-				continue
-			}
-			prefix, err := getPrefix(domain, suffix)
-			if err != nil {
-				continue
-			}
-			_, ok = newResolveDomain[suffix].Records[prefix]
-			if !ok {
-				newResolveDomain[suffix].Records[prefix] = []DNSRecord{}
-			}
-			ip := net.ParseIP(strings.Split(result.Address, "/")[0])
-			if ip.To4() != nil {
-				newResolveDomain[suffix].Records[prefix] = append(newResolveDomain[suffix].Records[prefix], DNSRecord{
-					DNSType: dns.TypeA,
-					A:       ip,
-				})
-			} else {
-				newResolveDomain[suffix].Records[prefix] = append(newResolveDomain[suffix].Records[prefix], DNSRecord{
-					DNSType: dns.TypeAAAA,
-					AAAA:    ip,
-				})
 			}
 		}
 		if ipAddressResp.Next == nil {
 			log.Println("sync complete.")
-			sortAllZone(&newResolveDomain)
-			updateFlag := false
-			for zoneName, zone1 := range newResolveDomain {
-				zone2, ok := resolveDomain[zoneName]
+			sortAllZone(&newTree)
+			for zoneName, tree := range newTree {
+				zm, ok := (*zms)[zoneName]
 				if !ok {
-					updateFlag = true
-					log.Printf("update zone: %s\n", zoneName)
+					zm.Tree = *tree
 					if ds != nil {
 						if err := ds.setZone(zoneName, &zoneStoreData{
-							Serial: getSerial(zoneName),
-							Tree:   zone1,
+							Serial: zm.getSerial(),
+							Tree:   tree,
 						}); err != nil {
 							log.Println(err)
 						}
 					}
+					log.Printf("update zone: %s\n", zoneName)
 					continue
 				}
-				if !compareZone(zone1, zone2) {
-					updateFlag = true
+				if !compareZone(tree, &zm.Tree) {
 					diff := ""
-					if zone2 != nil {
-						diff = cmp.Diff(zone2.Records, zone1.Records)
+					if &zm.Tree != nil {
+						diff = cmp.Diff(&zm.Tree.Records, tree.Records)
 						fmt.Print(diff)
 					}
-					updateSerial(zoneName)
+					zm.updateSerial()
+					zm.Tree = *tree
 					if ds != nil {
 						if err := ds.setZone(zoneName, &zoneStoreData{
-							Serial: getSerial(zoneName),
-							Tree:   zone1,
+							Serial: zm.getSerial(),
+							Tree:   tree,
 						}); err != nil {
 							log.Println(err)
 						}
 					}
-					err := notifySlack(&config.Slack, zoneName, getSerial(zoneName), diff)
+					err := notifySlack(&config.Slack, zoneName, zm.getSerial(), diff)
 					if err != nil {
 						fmt.Println(err)
 					}
-					log.Printf("update zone: %s serial: %d\n", zoneName, getSerial(zoneName))
+					log.Printf("update zone: %s serial: %d\n", zoneName, zm.getSerial())
 				}
-			}
-			if updateFlag {
-				resolveDomain = newResolveDomain
 			}
 			break
 		}
@@ -227,7 +218,7 @@ func syncNetbox(config *Config, zones *[]Zone, ds dataStore) {
 	}
 }
 
-func compareZone(zone1 *DNSTree, zone2 *DNSTree) bool {
+func compareZone(zone1 *dnsTree, zone2 *dnsTree) bool {
 	if zone1 == nil || zone2 == nil {
 		return false
 	}
@@ -271,7 +262,7 @@ func compareZone(zone1 *DNSTree, zone2 *DNSTree) bool {
 	return true
 }
 
-func sortAllZone(zones *map[string]*DNSTree) {
+func sortAllZone(zones *map[string]*dnsTree) {
 	for _, zone := range *zones {
 		for _, records := range zone.Records {
 			sort.Slice(records, func(i, j int) bool {
@@ -292,16 +283,6 @@ func sortAllZone(zones *map[string]*DNSTree) {
 			})
 		}
 	}
-}
-
-func getPrefix(fqdn string, suffix string) (prefix string, err error) {
-	if fqdn == suffix {
-		return "", nil
-	}
-	if !strings.HasSuffix(fqdn, "."+suffix) {
-		return "", fmt.Errorf("invalid suffix")
-	}
-	return fqdn[:len(fqdn)-len(suffix)-1], nil
 }
 
 func getClient(config *Config) *resty.Client {

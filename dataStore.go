@@ -7,10 +7,10 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
-func getDataStore(dConfig *DataStoreConfig, zones *[]Zone) dataStore {
+func getDataStore(dConfig *dataStoreConfig, zms *map[string]*zoneManager) dataStore {
 	switch dConfig.Mode {
 	case "yaml":
-		return newYamlDataStore(dConfig.Path, zones)
+		return newYamlDataStore(dConfig.Path, zms)
 	}
 	return nil
 }
@@ -29,18 +29,18 @@ type storeData struct {
 type zoneStoreData struct {
 	Serial uint32   `yaml:"serial"`
 	Origin string   `yaml:"origin"`
-	Tree   *DNSTree `yaml:"tree"`
+	Tree   *dnsTree `yaml:"tree"`
 }
 
-func newYamlDataStore(path string, zones *[]Zone) dataStore {
+func newYamlDataStore(path string, zms *map[string]*zoneManager) dataStore {
 	yd := &yamlDataStore{
 		path: path,
 	}
 	err := yd.load()
 	if err != nil {
 		zoneData := map[string]zoneStoreData{}
-		for _, zone := range *zones {
-			zoneData[zone.Suffix] = zoneStoreData{}
+		for _, zm := range *zms {
+			zoneData[zm.ZoneConfig.Suffix] = zoneStoreData{}
 		}
 		yd.data = &storeData{
 			Zones: zoneData,
