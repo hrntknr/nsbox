@@ -192,7 +192,7 @@ func syncNetbox(config *Config, zms *map[string]*zoneManager, ds dataStore) {
 				if !compareZone(tree, &zm.Tree) {
 					diff := ""
 					if &zm.Tree != nil {
-						diff = cmp.Diff(&zm.Tree.Records, tree.Records)
+						diff = cmp.Diff(zm.Tree.Records, tree.Records)
 						fmt.Print(diff)
 					}
 					zm.updateSerial()
