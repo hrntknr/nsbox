@@ -37,11 +37,6 @@ type dnsTree struct {
 	Records map[string][]dnsRecord `yaml:"records"`
 }
 
-func (tree *dnsTree) search(prefix string) *[]dnsRecord {
-	result := tree.Records[prefix]
-	return &result
-}
-
 func (tree *dnsTree) addRecords(name string, r dnsRecord) {
 	_, ok := tree.Records[name]
 	if !ok {

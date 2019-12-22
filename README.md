@@ -76,11 +76,11 @@ slack:
 - CNAME
 - Serial update
 - TXT
+- AXFR
 - webhook
 - slack integration
 ### wip
 - MX
-- AXFR
 - dnssec
 
 ## Copyright and License

@@ -127,25 +127,29 @@ func toFQDN(name string, zone string) string {
 	return fmt.Sprintf("%s.%s", name, zone)
 }
 
-func sortRR(rr []dns.RR) {
-	i := 0
-	for j := 0; j < len(rr); j++ {
-		switch rr[j].(type) {
-		case *dns.AAAA:
-			rr[i], rr[j] = rr[j], rr[i]
-			i++
+func sortRR(rr []dns.RR, rnd bool) {
+	if rnd {
+		i := 0
+		for j := 0; j < len(rr); j++ {
+			switch rr[j].(type) {
+			case *dns.AAAA:
+				rr[i], rr[j] = rr[j], rr[i]
+				i++
+			}
 		}
-	}
-	for j := 0; j < len(rr); j++ {
-		switch rr[j].(type) {
-		case *dns.A:
-			rr[i], rr[j] = rr[j], rr[i]
-			i++
+		for j := 0; j < len(rr); j++ {
+			switch rr[j].(type) {
+			case *dns.A:
+				rr[i], rr[j] = rr[j], rr[i]
+				i++
+			}
 		}
-	}
-	n := len(rr) - i
-	for j := n - 1; j >= 0; j-- {
-		k := rand.Intn(j + 1)
-		rr[j], rr[k] = rr[k], rr[j]
+		n := len(rr) - i
+		for j := n - 1; j >= 0; j-- {
+			k := rand.Intn(j + 1)
+			rr[j], rr[k] = rr[k], rr[j]
+		}
+	} else {
+
 	}
 }
