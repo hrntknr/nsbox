@@ -24,6 +24,9 @@ zoneDefault:
   ns:
   - ns1.example.com.
   - ns2.example.com.
+  allowTransfer:
+  - 127.0.0.1/8
+  - ::1/128
   soa:
     ns: ns1.example.com.
     mBox: root.example.com.

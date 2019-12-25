@@ -31,12 +31,13 @@ type serverConfig struct {
 }
 
 type zoneConfig struct {
-	Suffix  string                   `yaml:"suffix"`
-	Origin  *string                  `yaml:"origin"`
-	SOA     soaConfig                `yaml:"soa"`
-	TTL     *uint32                  `yaml:"ttl"`
-	NS      *[]string                `yaml:"ns"`
-	Records *[]addtionalRecordConfig `yaml:"records"`
+	Suffix        string                   `yaml:"suffix"`
+	Origin        *string                  `yaml:"origin"`
+	SOA           soaConfig                `yaml:"soa"`
+	TTL           *uint32                  `yaml:"ttl"`
+	NS            *[]string                `yaml:"ns"`
+	Records       *[]addtionalRecordConfig `yaml:"records"`
+	AllowTransfer *[]string                `yaml:"allowTransfer"`
 }
 
 type addtionalRecordConfig struct {
@@ -51,9 +52,10 @@ type tsigSecretConfig struct {
 }
 
 type zoneDefaultConfig struct {
-	SOA soaConfig `yaml:"soa"`
-	TTL *uint32   `yaml:"ttl"`
-	NS  *[]string `yaml:"ns"`
+	SOA           soaConfig `yaml:"soa"`
+	TTL           *uint32   `yaml:"ttl"`
+	NS            *[]string `yaml:"ns"`
+	AllowTransfer *[]string `yaml:"allowTransfer"`
 }
 
 type soaConfig struct {

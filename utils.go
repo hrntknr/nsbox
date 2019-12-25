@@ -1,8 +1,10 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"math/rand"
+	"net"
 
 	"github.com/miekg/dns"
 )
@@ -12,6 +14,7 @@ func zoneMerge(zoneConfig *zoneConfig, zoneDefaultConfig *zoneDefaultConfig) (*z
 	var origin string
 	var soaNS, mBox string
 	var ttl, refresh, retry, expire, minTTL uint32
+	var allowTransfer []string
 	var ns []string = []string{}
 	if zoneConfig.Origin != nil {
 		origin = dns.Fqdn(*zoneConfig.Origin)
@@ -78,6 +81,13 @@ func zoneMerge(zoneConfig *zoneConfig, zoneDefaultConfig *zoneDefaultConfig) (*z
 	} else {
 		return nil, fmt.Errorf("soa.minTTL not found")
 	}
+	if zoneConfig.AllowTransfer != nil {
+		allowTransfer = *zoneConfig.AllowTransfer
+	} else if zoneDefaultConfig.AllowTransfer != nil {
+		allowTransfer = *zoneDefaultConfig.AllowTransfer
+	} else {
+		allowTransfer = []string{}
+	}
 	records := map[string][]dnsRecord{}
 	if zoneConfig.Records != nil {
 		for _, zc := range *zoneConfig.Records {
@@ -112,11 +122,12 @@ func zoneMerge(zoneConfig *zoneConfig, zoneDefaultConfig *zoneDefaultConfig) (*z
 			Expire:  expire,
 			MinTTL:  minTTL,
 		},
-		Records: records,
-		Suffix:  fqdn,
-		Origin:  origin,
-		TTL:     ttl,
-		NS:      ns,
+		Records:       records,
+		Suffix:        fqdn,
+		Origin:        origin,
+		TTL:           ttl,
+		NS:            ns,
+		AllowTransfer: allowTransfer,
 	}, nil
 }
 
@@ -152,4 +163,17 @@ func sortRR(rr []dns.RR, rnd bool) {
 	} else {
 
 	}
+}
+
+func parseIP(s string) (net.IP, error) {
+	ip, _, err := net.SplitHostPort(s)
+	if err != nil {
+		return nil, err
+	}
+	ip2 := net.ParseIP(ip)
+	if ip2 == nil {
+		return nil, errors.New("invalid IP")
+	}
+
+	return ip2, nil
 }

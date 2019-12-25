@@ -1,7 +1,6 @@
 package main
 
 import (
-	"errors"
 	"log"
 	"net"
 	"net/http"
@@ -47,19 +46,6 @@ func getHandler(ch chan struct{}, ts string, allowFrom []*net.IPNet) (func(w htt
 			}
 		}()
 	}, nil
-}
-
-func parseIP(s string) (net.IP, error) {
-	ip, _, err := net.SplitHostPort(s)
-	if err != nil {
-		return nil, err
-	}
-	ip2 := net.ParseIP(ip)
-	if ip2 == nil {
-		return nil, errors.New("invalid IP")
-	}
-
-	return ip2, nil
 }
 
 func startListen(wc *webhookConfig) (chan struct{}, error) {

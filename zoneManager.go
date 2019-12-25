@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"net"
 	"sort"
 	"strings"
 	"sync"
@@ -11,12 +12,13 @@ import (
 )
 
 type zone struct {
-	Suffix  string                 `yaml:"suffix"`
-	Origin  string                 `yaml:"origin"`
-	SOA     soa                    `yaml:"soa"`
-	TTL     uint32                 `yaml:"ttl"`
-	NS      []string               `yaml:"ns"`
-	Records map[string][]dnsRecord `yaml:"records"`
+	Suffix        string                 `yaml:"suffix"`
+	Origin        string                 `yaml:"origin"`
+	SOA           soa                    `yaml:"soa"`
+	TTL           uint32                 `yaml:"ttl"`
+	NS            []string               `yaml:"ns"`
+	Records       map[string][]dnsRecord `yaml:"records"`
+	AllowTransfer []string               `yaml:"allowTransfer"`
 }
 
 func newZoneManager(zone *zone) *zoneManager {
@@ -135,6 +137,32 @@ func (zm *zoneManager) handler(w dns.ResponseWriter, r *dns.Msg) {
 				m.Answer = append(m.Answer, result)
 			}
 		case dns.TypeAXFR:
+			allowTransfer := []*net.IPNet{}
+			for _, allowStr := range zm.ZoneConfig.AllowTransfer {
+				_, subnet, err := net.ParseCIDR(allowStr)
+				if err != nil {
+					w.WriteMsg(m)
+					return
+				}
+				allowTransfer = append(allowTransfer, subnet)
+			}
+
+			ip, err := parseIP(w.RemoteAddr().String())
+			if err != nil {
+				w.WriteMsg(m)
+				return
+			}
+			allowFlag := false
+			for _, allow := range allowTransfer {
+				if allow.Contains(ip) {
+					allowFlag = true
+					break
+				}
+			}
+			if !allowFlag {
+				w.WriteMsg(m)
+				return
+			}
 			if zm.ZoneConfig.Origin != q.Name {
 				w.WriteMsg(m)
 				return
